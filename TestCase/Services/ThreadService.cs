@@ -133,19 +133,18 @@ public class ThreadService : IThreadService
         try
         {
             _logger.LogInformation("Поток генерации автомобилей запущен.");
-            if (obj is not CancellationTokenSource)
+            if (obj is not CancellationToken token)
             {
-                _logger.LogError("GenerateCarThreadFunction получила в качестве аргумента не CancellationTokenSource");
+                _logger.LogError("GenerateCarThreadFunction получила в качестве аргумента не CancellationToken");
                 return;
             }
 
-            var cts = (CancellationTokenSource)obj;
             var max = Cars.Length;
             CarThreadStep.Reset();
-            while (!cts.IsCancellationRequested)
+            while (!token.IsCancellationRequested)
             {
-                CarThreadStep.WaitOne();
-                if (cts.IsCancellationRequested) break;
+                var eventThatSignaledIndex = WaitHandle.WaitAny([CarThreadStep, token.WaitHandle,]);
+                if (token.IsCancellationRequested || eventThatSignaledIndex == 1) break;
                 var value = new Car(DateTime.Now, Cars[Random.Next(max)]);
                 AddRecordToCollection(value);
                 DataService.Create(value);
@@ -171,19 +170,18 @@ public class ThreadService : IThreadService
         try
         {
             _logger.LogInformation("Поток генерации водителей запущен.");
-            if (obj is not CancellationTokenSource)
+            if (obj is not CancellationToken token)
             {
-                _logger.LogError("GenerateDriverThreadFunction получила в качестве аргумента не CancellationTokenSource");
+                _logger.LogError("GenerateDriverThreadFunction получила в качестве аргумента не CancellationToken");
                 return;
             }
 
-            var cts = (CancellationTokenSource)obj!;
             var max = Drivers.Length;
             DriverThreadStep.Reset();
-            while (!cts.IsCancellationRequested)
+            while (!token.IsCancellationRequested)
             {
-                DriverThreadStep.WaitOne();
-                if (cts.IsCancellationRequested) break;
+                var eventThatSignaledIndex = WaitHandle.WaitAny([DriverThreadStep, token.WaitHandle,]);
+                if (token.IsCancellationRequested || eventThatSignaledIndex == 1) break;
                 var value = new Driver(DateTime.Now, Drivers[Random.Next(max)]);
                 AddRecordToCollection(value);
                 DataService.Create(value);
@@ -226,6 +224,7 @@ public class ThreadService : IThreadService
         {
             if (_carThreadCancellationToken.IsCancellationRequested) return;
             _carThreadCancellationToken.Cancel();
+            _carThreadCancellationToken.Dispose();
         }
     }
 
@@ -239,6 +238,7 @@ public class ThreadService : IThreadService
         {
             if (_driverThreadCancellationToken.IsCancellationRequested) return;
             _driverThreadCancellationToken.Cancel();
+            _driverThreadCancellationToken.Dispose();
         }
     }
 
@@ -258,7 +258,7 @@ public class ThreadService : IThreadService
                 Name = "FirstThread",
             };
         
-            _generateCarThread.Start(_carThreadCancellationToken);
+            _generateCarThread.Start(_carThreadCancellationToken.Token);
         }
     }
 
@@ -278,7 +278,7 @@ public class ThreadService : IThreadService
                 Name = "SecondThread",
             };
 
-            _generateDriverThread.Start(_driverThreadCancellationToken);
+            _generateDriverThread.Start(_driverThreadCancellationToken.Token);
         }
     }
 
